@@ -1,5 +1,5 @@
 """ui/market_view.py — واجهة السوق الحرة بالكامل بأزرار (بدون أوامر).
-تم نقل حالة العروض من الذاكرة إلى قاعدة البيانات (#1) — تبقى العروض سليمة حتى بعد إعادة تشغيل البوت."""
+تم نقل حالة العروض من الذاكرة إلى قاعدة البيانات — تبقى العروض سليمة حتى بعد إعادة تشغيل البوت."""
 import discord
 
 import database as db
@@ -60,29 +60,26 @@ class ListResourceModal(discord.ui.Modal, title="📦 عرض مورد للبيع
             view = BuyListingView(listing_id)
             msg = await interaction.channel.send(embed=e, view=view)
             await db.set_market_listing_message(listing_id, interaction.channel.id, msg.id)
-            interaction.client.add_view(view, message_id=msg.id)  # يبقى فعّالاً بعد إعادة تشغيل البوت
-            await interaction.response.send_message(embed=embeds.success_embed("تم نشر عرضك في السوق."),
-                                                      ephemeral=True)
+            interaction.client.add_view(view, message_id=msg.id)
+            await interaction.response.send_message(embed=embeds.success_embed("تم نشر عرضك في السوق."), ephemeral=True)
         except (PlayerNotFound, NotEnoughResources) as e:
             await interaction.response.send_message(embed=embeds.error_embed(e.message), ephemeral=True)
 
 
 class BuyListingView(discord.ui.View):
     def __init__(self, listing_id: int):
-        super().__init__(timeout=None)  # دائم — العرض يبقى حتى يُشترى أو يُلغى، مثبّت عبر message_id
+        super().__init__(timeout=None)
         self.listing_id = listing_id
 
     @discord.ui.button(label="💰 شراء الآن", style=discord.ButtonStyle.success, custom_id="siyada:market_buy")
     async def buy(self, interaction: discord.Interaction, button: discord.ui.Button):
         listing = await db.get_market_listing(self.listing_id)
         if not listing:
-            await interaction.response.send_message(embed=embeds.error_embed("هذا العرض لم يعد متاحاً."),
-                                                      ephemeral=True)
+            await interaction.response.send_message(embed=embeds.error_embed("هذا العرض لم يعد متاحاً."), ephemeral=True)
             return
         buyer_id = interaction.user.id
         if buyer_id == listing["seller_id"]:
-            await interaction.response.send_message(embed=embeds.error_embed("لا يمكنك شراء عرضك الخاص."),
-                                                      ephemeral=True)
+            await interaction.response.send_message(embed=embeds.error_embed("لا يمكنك شراء عرضك الخاص."), ephemeral=True)
             return
         total_cost = listing["amount"] * listing["price"]
         try:
@@ -105,8 +102,7 @@ class BuyListingView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         listing = await db.get_market_listing(self.listing_id)
         if not listing:
-            await interaction.response.send_message(embed=embeds.error_embed("هذا العرض لم يعد متاحاً."),
-                                                      ephemeral=True)
+            await interaction.response.send_message(embed=embeds.error_embed("هذا العرض لم يعد متاحاً."), ephemeral=True)
             return
         if interaction.user.id != listing["seller_id"]:
             await interaction.response.send_message(embed=embeds.error_embed("هذا العرض ليس لك."), ephemeral=True)
@@ -123,8 +119,7 @@ class MarketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="📦 عرض مورد للبيع", style=discord.ButtonStyle.primary,
-                        custom_id="siyada:list_resource")
+    @discord.ui.button(label="📦 عرض مورد للبيع", style=discord.ButtonStyle.primary, custom_id="siyada:list_resource")
     async def list_resource(self, interaction: discord.Interaction, button: discord.ui.Button):
         if await db.is_maintenance_mode():
             await interaction.response.send_message(embed=embeds.maintenance_embed(), ephemeral=True)
