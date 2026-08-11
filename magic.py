@@ -11,8 +11,6 @@ import embeds
 from constants import WIZARDS, BEASTS, SUMMON_DURATION_DAYS, EXPEDITION_COST_RATIO, \
     EXPEDITION_SUCCESS_RATE, EXPEDITION_SUCCESS_RATE_ECLIPSE
 
-# ملاحظة: حالة الكسوف الصوفي أصبحت دائمة في قاعدة البيانات (world_state) بدل متغير وحدة (#1)
-
 
 class Magic(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -26,12 +24,13 @@ class Magic(commands.Cog):
         from magic_view import MagicView
         from economy import _find_and_update_panel
         p = await db.try_get_player(user_id)
-        if not p:
+        if not p or not p.magic_channel_id:
             return
         b = await db.get_buildings(user_id)
         t = await db.get_troops(user_id)
         ch = guild.get_channel(p.magic_channel_id)
-        await _find_and_update_panel(ch, embeds.magic_altar_embed(p, b, t), MagicView(), title_prefix="🔮")
+        if ch:
+            await _find_and_update_panel(ch, embeds.magic_altar_embed(p, b, t), MagicView(), title_prefix="🔮")
 
     # ------------------------------------------------------------
     @commands.Cog.listener()
@@ -76,7 +75,8 @@ class Magic(commands.Cog):
 
             await interaction.response.send_message(
                 embed=embeds.success_embed(f"تم استدعاء {data['name']}! ({data['effect']})"), ephemeral=True)
-            await self._refresh_magic_panel(interaction.guild, user_id)
+            if interaction.guild:
+                await self._refresh_magic_panel(interaction.guild, user_id)
         except (PlayerNotFound, NotEnoughResources) as e:
             await interaction.response.send_message(embed=embeds.error_embed(e.message), ephemeral=True)
 
@@ -124,7 +124,8 @@ class Magic(commands.Cog):
                 await interaction.response.send_message(
                     embed=embeds.error_embed("💀 فشلت البعثة وضاعت الموارد."), ephemeral=True)
 
-            await self._refresh_magic_panel(interaction.guild, user_id)
+            if interaction.guild:
+                await self._refresh_magic_panel(interaction.guild, user_id)
         except (PlayerNotFound, NotEnoughResources) as e:
             await interaction.response.send_message(embed=embeds.error_embed(e.message), ephemeral=True)
 
