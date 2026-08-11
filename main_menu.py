@@ -66,5 +66,5 @@ class MainStatusView(discord.ui.View):
     async def daily_quests(self, interaction: discord.Interaction, button: discord.ui.Button):
         from quests import QuestsView
         quests = await db.get_today_quests(interaction.user.id)
-        await interaction.response.send_message(embed=embeds.daily_quests_embed(quests), view=QuestsView(),
-                                                  ephemeral=True)
+        await interaction.response.send_message(embed=embeds.daily_quests_embed(quests), view=QuestsView(), ephemeral=True)
+ 
