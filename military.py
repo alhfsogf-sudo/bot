@@ -21,14 +21,12 @@ class Military(commands.Cog):
     async def setup_war(self, interaction: discord.Interaction):
         try:
             player = await db.get_player(interaction.user.id)
-        except Exception:
-            await interaction.response.send_message("❌ استخدم هذا الأمر داخل قناة ديوان حرب لاعب مسجّل.",
-                                                      ephemeral=True)
-            return
-        troops = await db.get_troops(player.user_id)
-        power = military_power(troops.infantry, troops.cavalry, troops.archers, player.culture, troops.mercenary_power)
-        await interaction.channel.send(embed=embeds.war_divan_embed(player, troops, power), view=WarView())
-        await interaction.response.send_message("✅ تم النشر.", ephemeral=True)
+            troops = await db.get_troops(player.user_id)
+            power = military_power(troops.infantry, troops.cavalry, troops.archers, player.culture, troops.mercenary_power)
+            await interaction.channel.send(embed=embeds.war_divan_embed(player, troops, power), view=WarView())
+            await interaction.response.send_message("✅ تم النشر.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ تعذر تنفيذ الأمر: {e}", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
