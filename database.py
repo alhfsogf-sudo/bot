@@ -1,5 +1,5 @@
 """
-core/database.py — أهم ملف في المشروع. كل تعامل مع قاعدة البيانات يمر من هنا.
+core/database.py — قاعدة البيانات معدلة لدعم أرقام الموارد بلا حدود (NUMERIC).
 """
 import asyncpg
 from datetime import datetime, timedelta, timezone
@@ -38,11 +38,11 @@ async def create_tables():
         user_id             BIGINT PRIMARY KEY,
         guild_id            BIGINT NOT NULL,
         culture             TEXT NOT NULL,
-        gold                INTEGER NOT NULL DEFAULT 0,
-        wood                INTEGER NOT NULL DEFAULT 0,
-        iron                INTEGER NOT NULL DEFAULT 0,
-        food                INTEGER NOT NULL DEFAULT 0,
-        essence             INTEGER NOT NULL DEFAULT 0,
+        gold                NUMERIC NOT NULL DEFAULT 0,
+        wood                NUMERIC NOT NULL DEFAULT 0,
+        iron                NUMERIC NOT NULL DEFAULT 0,
+        food                NUMERIC NOT NULL DEFAULT 0,
+        essence             NUMERIC NOT NULL DEFAULT 0,
         category_id         BIGINT,
         king_channel_id     BIGINT,
         war_channel_id      BIGINT,
@@ -60,40 +60,40 @@ async def create_tables():
 
     CREATE TABLE IF NOT EXISTS buildings (
         user_id  BIGINT PRIMARY KEY REFERENCES players(user_id) ON DELETE CASCADE,
-        farm     INTEGER NOT NULL DEFAULT 1,
-        mine     INTEGER NOT NULL DEFAULT 1,
-        lumber   INTEGER NOT NULL DEFAULT 1,
-        castle   INTEGER NOT NULL DEFAULT 1,
-        altar    INTEGER NOT NULL DEFAULT 0
+        farm     BIGINT NOT NULL DEFAULT 1,
+        mine     BIGINT NOT NULL DEFAULT 1,
+        lumber   BIGINT NOT NULL DEFAULT 1,
+        castle   BIGINT NOT NULL DEFAULT 1,
+        altar    BIGINT NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS troops (
-        user_id            BIGINT PRIMARY KEY REFERENCES players(user_id) ON DELETE CASCADE,
-        infantry           INTEGER NOT NULL DEFAULT 0,
-        cavalry            INTEGER NOT NULL DEFAULT 0,
-        archers            INTEGER NOT NULL DEFAULT 0,
-        wounded            INTEGER NOT NULL DEFAULT 0,
-        wizard             TEXT,
-        wizard_expires_at  TIMESTAMPTZ,
-        beast              TEXT,
-        beast_expires_at   TIMESTAMPTZ,
-        mercenary_power    INTEGER NOT NULL DEFAULT 0,
+        user_id              BIGINT PRIMARY KEY REFERENCES players(user_id) ON DELETE CASCADE,
+        infantry             NUMERIC NOT NULL DEFAULT 0,
+        cavalry              NUMERIC NOT NULL DEFAULT 0,
+        archers              NUMERIC NOT NULL DEFAULT 0,
+        wounded              NUMERIC NOT NULL DEFAULT 0,
+        wizard               TEXT,
+        wizard_expires_at    TIMESTAMPTZ,
+        beast                TEXT,
+        beast_expires_at     TIMESTAMPTZ,
+        mercenary_power      NUMERIC NOT NULL DEFAULT 0,
         mercenary_expires_at TIMESTAMPTZ
     );
 
     CREATE TABLE IF NOT EXISTS alliances (
-        alliance_id  SERIAL PRIMARY KEY,
-        name         TEXT NOT NULL,
-        tag          TEXT NOT NULL,
-        leader_id    BIGINT NOT NULL,
-        hq_channel_id BIGINT,
+        alliance_id         SERIAL PRIMARY KEY,
+        name                TEXT NOT NULL,
+        tag                 TEXT NOT NULL,
+        leader_id           BIGINT NOT NULL,
+        hq_channel_id       BIGINT,
         war_room_channel_id BIGINT,
-        role_id      BIGINT,
-        bank_gold    INTEGER NOT NULL DEFAULT 0,
-        bank_wood    INTEGER NOT NULL DEFAULT 0,
-        bank_iron    INTEGER NOT NULL DEFAULT 0,
-        bank_food    INTEGER NOT NULL DEFAULT 0,
-        created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+        role_id             BIGINT,
+        bank_gold           NUMERIC NOT NULL DEFAULT 0,
+        bank_wood           NUMERIC NOT NULL DEFAULT 0,
+        bank_iron           NUMERIC NOT NULL DEFAULT 0,
+        bank_food           NUMERIC NOT NULL DEFAULT 0,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
     CREATE TABLE IF NOT EXISTS raid_log (
@@ -106,41 +106,37 @@ async def create_tables():
     CREATE INDEX IF NOT EXISTS idx_raid_log_pair_time
         ON raid_log (attacker_id, defender_id, created_at);
 
-    -- تخزين دائم لأي حالة عالمية بسيطة (التيتان، المجاعة، الكسوف، وضع الصيانة...) بدل الذاكرة
     CREATE TABLE IF NOT EXISTS world_state (
         key         TEXT PRIMARY KEY,
         value       JSONB NOT NULL,
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-    -- عروض السوق الحرة (كانت في الذاكرة، أصبحت دائمة)
     CREATE TABLE IF NOT EXISTS market_listings (
         id          SERIAL PRIMARY KEY,
         seller_id   BIGINT NOT NULL,
         resource    TEXT NOT NULL,
-        amount      INTEGER NOT NULL,
-        price       INTEGER NOT NULL,
+        amount      NUMERIC NOT NULL,
+        price       NUMERIC NOT NULL,
         channel_id  BIGINT,
         message_id  BIGINT,
         active      BOOLEAN NOT NULL DEFAULT true,
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
-    -- المهام اليومية
     CREATE TABLE IF NOT EXISTS daily_quests (
         id           SERIAL PRIMARY KEY,
         user_id      BIGINT NOT NULL,
         quest_type   TEXT NOT NULL,
-        target       INTEGER NOT NULL,
-        progress     INTEGER NOT NULL DEFAULT 0,
-        reward_gold  INTEGER NOT NULL DEFAULT 0,
+        target       BIGINT NOT NULL,
+        progress     BIGINT NOT NULL DEFAULT 0,
+        reward_gold  NUMERIC NOT NULL DEFAULT 0,
         completed    BOOLEAN NOT NULL DEFAULT false,
         claimed      BOOLEAN NOT NULL DEFAULT false,
         assigned_date DATE NOT NULL DEFAULT CURRENT_DATE
     );
     CREATE INDEX IF NOT EXISTS idx_daily_quests_user_date ON daily_quests (user_id, assigned_date);
 
-    -- سجل التجسس (لمكافحة التجسس / كشف من تجسس عليك)
     CREATE TABLE IF NOT EXISTS scout_log (
         id          SERIAL PRIMARY KEY,
         scout_id    BIGINT NOT NULL,
@@ -150,7 +146,6 @@ async def create_tables():
     );
     CREATE INDEX IF NOT EXISTS idx_scout_log_target_time ON scout_log (target_id, created_at);
 
-    -- تذاكر الدعم/الشكاوى
     CREATE TABLE IF NOT EXISTS tickets (
         id          SERIAL PRIMARY KEY,
         user_id     BIGINT NOT NULL,
@@ -158,6 +153,27 @@ async def create_tables():
         status      TEXT NOT NULL DEFAULT 'open',
         created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    -- ترقية الجداول الحالية تلقائياً بدعم الأرقام اللانهائية
+    ALTER TABLE players ALTER COLUMN gold TYPE NUMERIC USING gold::NUMERIC;
+    ALTER TABLE players ALTER COLUMN wood TYPE NUMERIC USING wood::NUMERIC;
+    ALTER TABLE players ALTER COLUMN iron TYPE NUMERIC USING iron::NUMERIC;
+    ALTER TABLE players ALTER COLUMN food TYPE NUMERIC USING food::NUMERIC;
+    ALTER TABLE players ALTER COLUMN essence TYPE NUMERIC USING essence::NUMERIC;
+
+    ALTER TABLE alliances ALTER COLUMN bank_gold TYPE NUMERIC USING bank_gold::NUMERIC;
+    ALTER TABLE alliances ALTER COLUMN bank_wood TYPE NUMERIC USING bank_wood::NUMERIC;
+    ALTER TABLE alliances ALTER COLUMN bank_iron TYPE NUMERIC USING bank_iron::NUMERIC;
+    ALTER TABLE alliances ALTER COLUMN bank_food TYPE NUMERIC USING bank_food::NUMERIC;
+
+    ALTER TABLE market_listings ALTER COLUMN amount TYPE NUMERIC USING amount::NUMERIC;
+    ALTER TABLE market_listings ALTER COLUMN price TYPE NUMERIC USING price::NUMERIC;
+
+    ALTER TABLE troops ALTER COLUMN infantry TYPE NUMERIC USING infantry::NUMERIC;
+    ALTER TABLE troops ALTER COLUMN cavalry TYPE NUMERIC USING cavalry::NUMERIC;
+    ALTER TABLE troops ALTER COLUMN archers TYPE NUMERIC USING archers::NUMERIC;
+    ALTER TABLE troops ALTER COLUMN wounded TYPE NUMERIC USING wounded::NUMERIC;
+    ALTER TABLE troops ALTER COLUMN mercenary_power TYPE NUMERIC USING mercenary_power::NUMERIC;
     """
     async with get_pool().acquire() as conn:
         await conn.execute(schema)
@@ -239,7 +255,6 @@ async def create_player(
 
 
 async def update_player_resources(user_id: int, **deltas):
-    """يحدّث موارد اللاعب بفرق (موجب أو سالب). مثال: update_player_resources(uid, gold=-100, wood=50)"""
     if not deltas:
         return
     allowed = {"gold", "wood", "iron", "food", "essence"}
@@ -363,7 +378,7 @@ async def set_beast(user_id: int, beast: Optional[str], expires_at: Optional[dat
 
 
 # ------------------------------------------------------------------
-# مكافحة الغش — سجل الغارات
+# سجل الغارات
 # ------------------------------------------------------------------
 async def count_raids_last_24h(attacker_id: int, defender_id: int) -> int:
     async with get_pool().acquire() as conn:
@@ -379,7 +394,6 @@ async def count_raids_last_24h(attacker_id: int, defender_id: int) -> int:
 
 
 async def count_raids_on_all_last_24h(attacker_id: int) -> dict:
-    """يرجع {defender_id: count} لكل من هاجمهم اللاعب خلال 24 ساعة (لأدوات الأدمن)."""
     async with get_pool().acquire() as conn:
         rows = await conn.fetch(
             """
@@ -458,7 +472,7 @@ async def delete_alliance(alliance_id: int):
 
 
 # ------------------------------------------------------------------
-# اسم الإمبراطورية / تحذير الدرع / التلميحات الذكية (تحسينات UX)
+# اسم الإمبراطورية / الدرع
 # ------------------------------------------------------------------
 async def set_empire_name(user_id: int, name: str):
     async with get_pool().acquire() as conn:
@@ -490,7 +504,7 @@ async def mark_tip_sent(user_id: int):
 
 
 # ------------------------------------------------------------------
-# الحالة العالمية الدائمة (تيتان / مجاعة / كسوف / وضع الصيانة)
+# الحالة العالمية الدائمة
 # ------------------------------------------------------------------
 import json as _json
 
@@ -520,7 +534,7 @@ async def delete_world_state(key: str):
 
 
 # ------------------------------------------------------------------
-# السوق الحرة (دائم في قاعدة البيانات بدل الذاكرة)
+# السوق الحرة
 # ------------------------------------------------------------------
 async def create_market_listing(seller_id: int, resource: str, amount: int, price: int) -> int:
     async with get_pool().acquire() as conn:
@@ -563,7 +577,6 @@ async def get_active_market_listings() -> list[dict]:
 # المهام اليومية
 # ------------------------------------------------------------------
 async def assign_daily_quests(user_id: int, quests: list[dict]):
-    """quests: [{"quest_type": "train", "target": 50, "reward_gold": 500}, ...]"""
     async with get_pool().acquire() as conn:
         async with conn.transaction():
             await conn.execute(
@@ -616,7 +629,7 @@ async def claim_quest_reward(quest_id: int, user_id: int) -> int:
 
 
 # ------------------------------------------------------------------
-# سجل التجسس (مكافحة التجسس)
+# التجسس
 # ------------------------------------------------------------------
 async def log_scout_attempt(scout_id: int, target_id: int, success: bool):
     async with get_pool().acquire() as conn:
@@ -636,7 +649,7 @@ async def get_recent_scouts_on(target_id: int, limit: int = 5) -> list[dict]:
 
 
 # ------------------------------------------------------------------
-# الغارات — حد الأهداف المختلفة يومياً + سجل المعارك
+# الغارات
 # ------------------------------------------------------------------
 async def count_distinct_targets_today(attacker_id: int) -> int:
     async with get_pool().acquire() as conn:
@@ -666,7 +679,6 @@ async def get_battle_history(user_id: int, limit: int = 10) -> list[dict]:
 # لوحة الصدارة
 # ------------------------------------------------------------------
 async def get_leaderboard_by_power(limit: int = 10) -> list[dict]:
-    """يحسب القوة العسكرية التقريبية داخل SQL مباشرة (مشاة×10 + فرسان×15 + رماة×12)."""
     async with get_pool().acquire() as conn:
         rows = await conn.fetch(
             """
@@ -716,7 +728,7 @@ async def has_open_ticket(user_id: int) -> bool:
 
 
 # ------------------------------------------------------------------
-# وضع الصيانة (#23)
+# وضع الصيانة
 # ------------------------------------------------------------------
 async def is_maintenance_mode() -> bool:
     return bool(await get_world_state("maintenance_mode", False))
