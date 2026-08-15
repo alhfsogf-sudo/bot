@@ -1,6 +1,6 @@
-"""cogs/admin.py — Module 10: أدوات الأدمن ومكافحة الغش + لوحة أدمن مرئية (#11) +
-فحص توازن تلقائي (#21) + أرشفة نهاية الموسم (#22) + وضع الصيانة (#23).
-تبقى هذه أوامر (أدمن فقط) لأنها أدوات إدارية وليست تجربة لاعب — الطلب كان استبدال أوامر *اللاعبين* بأزرار."""
+"""
+cogs/admin.py — أدوات الأدمن معدلة لتقبل إعطاء أرقام بلا حدود عبر تحويل النص إلى Int.
+"""
 import io
 import discord
 from datetime import datetime, timezone
@@ -17,12 +17,9 @@ from logger import get_logger
 log = get_logger("admin")
 
 CHEAT_RAID_THRESHOLD = 5
-BALANCE_OUTLIER_RATIO = 3.0  # لاعب يُعتبر خارجاً عن التوازن إذا قوته > 3× متوسط القوة
+BALANCE_OUTLIER_RATIO = 3.0
 
 
-# ------------------------------------------------------------------
-# (#11) لوحة أدمن مرئية بأزرار بدل أوامر متفرقة
-# ------------------------------------------------------------------
 class AdminPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=180)
@@ -71,22 +68,23 @@ class Admin(commands.Cog):
         if ch:
             await ch.send(embed=embeds.mail_log_embed("🛠️ سجل الأدمن", text, 0x34495E))
 
-    # ------------------------------------------------------------
-    @app_commands.command(name="admin_panel", description="[أدمن] لوحة تحكم مرئية موحّدة (#11)")
+    @app_commands.command(name="admin_panel", description="[أدمن] لوحة تحكم مرئية موحّدة")
     @app_commands.checks.has_permissions(administrator=True)
     async def admin_panel(self, interaction: discord.Interaction):
         await interaction.response.send_message(
             embed=embeds.mail_log_embed("🛠️ لوحة تحكم الأدمن", "اختر إجراءً من الأزرار أدناه.", 0x34495E),
             view=AdminPanelView(), ephemeral=True)
 
-    @app_commands.command(name="admin_give", description="[أدمن] إعطاء موارد للاعب")
+    @app_commands.command(name="admin_give", description="[أدمن] إعطاء موارد بلا حدود للاعب")
     @app_commands.checks.has_permissions(administrator=True)
-    async def admin_give(self, interaction: discord.Interaction, member: discord.Member,
-                          resource: str, amount: int):
+    async def admin_give(self, interaction: discord.Interaction, member: discord.Member, resource: str, amount: str):
         try:
-            await db.update_player_resources(member.id, **{resource: amount})
-            await interaction.response.send_message(f"✅ أُعطي {member.mention} {amount} {resource}", ephemeral=True)
-            await self._log(interaction.guild, f"{interaction.user.mention} أعطى {member.mention} {amount} {resource}")
+            val = int(amount)
+            await db.update_player_resources(member.id, **{resource: val})
+            await interaction.response.send_message(f"✅ أُعطي {member.mention} {val:,} {resource}", ephemeral=True)
+            await self._log(interaction.guild, f"{interaction.user.mention} أعطى {member.mention} {val:,} {resource}")
+        except ValueError:
+            await interaction.response.send_message("❌ الرجاء إدخال رقم صحيح!", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ خطأ: {e}", ephemeral=True)
             log.error(f"admin_give فشل: {e}", exc_info=True)
@@ -122,14 +120,11 @@ class Admin(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def admin_list_players(self, interaction: discord.Interaction):
         players = await db.get_all_players()
-        lines = [f"<@{p.user_id}> — {p.culture} — 🪙{p.gold}" for p in players[:40]]
+        lines = [f"<@{p.user_id}> — {p.culture} — 🪙{p.gold:,}" for p in players[:40]]
         await interaction.response.send_message(
             embed=embeds.mail_log_embed(f"👥 اللاعبون ({len(players)})", "\n".join(lines) or "لا يوجد", 0x34495E),
             ephemeral=True)
 
-    # ------------------------------------------------------------
-    # (#23) وضع الصيانة
-    # ------------------------------------------------------------
     @app_commands.command(name="admin_maintenance", description="[أدمن] تبديل وضع الصيانة تشغيل/إيقاف")
     @app_commands.checks.has_permissions(administrator=True)
     async def admin_maintenance(self, interaction: discord.Interaction):
@@ -139,9 +134,6 @@ class Admin(commands.Cog):
         await interaction.response.send_message(f"وضع الصيانة {state}.", ephemeral=True)
         await self._log(interaction.guild, f"{interaction.user.mention} بدّل وضع الصيانة إلى: {state}")
 
-    # ------------------------------------------------------------
-    # (#22) أرشفة الموسم عند الانتهاء
-    # ------------------------------------------------------------
     @app_commands.command(name="admin_end_season", description="[أدمن] إعلان نهاية الموسم مع أرشفة كاملة للإحصائيات")
     @app_commands.checks.has_permissions(administrator=True)
     async def admin_end_season(self, interaction: discord.Interaction, winner: discord.Member):
@@ -162,9 +154,6 @@ class Admin(commands.Cog):
         await interaction.followup.send("✅ أُعلنت نهاية الموسم وأُرفق أرشيف الإحصائيات.", file=file, ephemeral=True)
         await self._log(interaction.guild, f"{interaction.user.mention} أنهى الموسم — الفائز: {winner.mention}")
 
-    # ------------------------------------------------------------
-    # (#21) فحص توازن تلقائي — تنبيه الأدمن عند وجود لاعب متفوق بشكل غير طبيعي
-    # ------------------------------------------------------------
     @tasks.loop(hours=24)
     async def balance_check(self):
         rows = await db.get_leaderboard_by_power(1000)
@@ -188,9 +177,6 @@ class Admin(commands.Cog):
     async def before_balance_check(self):
         await self.bot.wait_until_ready()
 
-    # ------------------------------------------------------------
-    # مكافحة الغش
-    # ------------------------------------------------------------
     @commands.Cog.listener()
     async def on_raid_initiated_for_cheat_check(self, attacker_id: int, defender_id: int):
         counts = await db.count_raids_on_all_last_24h(attacker_id)
